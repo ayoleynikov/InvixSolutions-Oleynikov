@@ -1,37 +1,49 @@
 from aiogram import F, Router
 from aiogram.filters import CommandStart
-from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup, WebAppInfo
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
+from aiogram.utils.formatting import Bold, Text
 
 from bot.api_client import create_product
 from bot.config import ADMIN_TELEGRAM_IDS, API_URL, WEBAPP_URL
 
 router = Router()
 
+CATALOG_BUTTON_TEXT = "Открыть каталог"
 
-def catalog_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
+
+def catalog_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
             [
-                KeyboardButton(
-                    text="Открыть каталог",
+                InlineKeyboardButton(
+                    text=CATALOG_BUTTON_TEXT,
                     web_app=WebAppInfo(url=WEBAPP_URL),
                 )
             ]
-        ],
-        resize_keyboard=True,
+        ]
     )
 
 
-async def send_catalog_invite(message: Message) -> None:
+def catalog_invite_text(*, with_greeting: bool) -> Text:
+    parts: list = []
+    if with_greeting:
+        parts.append("Привет!\n\n")
+    parts.append(Bold("У меня есть товары"))
+    parts.append("\nНажмите кнопку ниже — откроется каталог.")
+    return Text(*parts)
+
+
+async def send_catalog_invite(message: Message, *, with_greeting: bool = False) -> None:
+    content = catalog_invite_text(with_greeting=with_greeting)
     await message.answer(
-        "У меня есть товары",
+        **content.as_kwargs(),
         reply_markup=catalog_keyboard(),
     )
 
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
-    await send_catalog_invite(message)
+    await send_catalog_invite(message, with_greeting=True)
 
 
 @router.message(F.photo, F.caption)
