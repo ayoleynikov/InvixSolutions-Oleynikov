@@ -1,0 +1,100 @@
+# INVIX catalog — Render Blueprint
+# Apply: https://dashboard.render.com/blueprint/new?repo=https://github.com/ayoleynikov/InvixSolutions-Oleynikov
+
+databases:
+  - name: catalog-db
+    plan: free
+    region: oregon
+    postgresMajorVersion: "16"
+    databaseName: catalog
+    ipAllowList: []
+
+services:
+  - type: web
+    name: api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: ./api
+    healthCheckPath: /health
+    buildFilter:
+      paths:
+        - api/**
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: catalog-db
+          property: connectionString
+      - key: MINIO_ENDPOINT
+        sync: false
+      - key: MINIO_ACCESS_KEY
+        sync: false
+      - key: MINIO_SECRET_KEY
+        sync: false
+      - key: MINIO_BUCKET
+        value: products
+      - key: MINIO_PUBLIC_URL
+        sync: false
+      - key: MINIO_SECURE
+        value: "true"
+      - key: CORS_ORIGINS
+        sync: false
+
+  - type: web
+    name: web
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./web/Dockerfile
+    dockerContext: ./web
+    healthCheckPath: /
+    buildFilter:
+      paths:
+        - web/**
+    envVars:
+      - key: API_INTERNAL_HOST
+        fromService:
+          name: api
+          type: web
+          property: host
+      - key: API_INTERNAL_PORT
+        fromService:
+          name: api
+          type: web
+          property: port
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+
+  - type: web
+    name: bot
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./bot/Dockerfile
+    dockerContext: ./bot
+    healthCheckPath: /health
+    buildFilter:
+      paths:
+        - bot/**
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_TELEGRAM_IDS
+        sync: false
+      - key: BOT_MODE
+        value: webhook
+      - key: WEBHOOK_PATH
+        value: /webhook
+      - key: WEBAPP_URL
+        sync: false
+      - key: API_INTERNAL_HOST
+        fromService:
+          name: api
+          type: web
+          property: host
+      - key: API_INTERNAL_PORT
+        fromService:
+          name: api
+          type: web
+          property: port
