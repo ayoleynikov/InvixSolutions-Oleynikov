@@ -1,97 +1,67 @@
-# Каталог — микросервис INVIX (INV-9H7HH)
+# Каталог товаров (INV-9H7HH)
 
-MVP каталога товаров: Telegram-бот (aiogram 3), REST API (FastAPI), веб-каталог (Next.js App Router), PostgreSQL и MinIO. Стек поднимается через Docker Compose.
+Тестовое задание Invix: Telegram-бот, REST API и веб-каталог. Товары в PostgreSQL, изображения в MinIO (локально) или S3-compatible хранилище на проде (Cloudflare R2, AWS S3).
 
-## Архитектура
+**Стек:** aiogram 3 · FastAPI · Next.js (App Router) · PostgreSQL · MinIO / S3.
 
+## Запуск
+
+```bash
+cp .env.example .env
+# BOT_TOKEN — @BotFather; ADMIN_TELEGRAM_IDS — id админов через запятую
+# WEBAPP_URL — URL каталога (локально http://localhost:3000)
+# MINIO_PUBLIC_URL — откуда браузер тянет картинки (локально http://localhost:9000)
+docker compose up --build
 ```
-Telegram (бот / Mini App)
-        │
-        ├── bot ──POST /api/products──► api ◄── GET /api/products ── web (Next.js)
-        │                                  │
-        │                                  ├── PostgreSQL (товары)
-        │                                  └── MinIO S3 (изображения)
-        └── WebApp кнопка ───────────────► web «Каталог»
-```
 
-- **Состояние** хранится только в PostgreSQL и MinIO. Сервисы `api`, `bot` и `web` не используют локальный диск и in-memory сессии для данных каталога.
-- **Масштабирование (2+ реплики):**
-  - **api** — горизонтально за балансировщиком; общая БД и bucket MinIO; без sticky sessions.
-  - **web** — любое число реплик Next.js (standalone); SSR ходит во внутренний `http://api:8000`.
-  - **bot** — для нескольких инстансов задайте `BOT_MODE=webhook`, один публичный `WEBHOOK_URL` за reverse proxy; **polling** (`BOT_MODE=polling`) — только один процесс бота.
-  - **postgres / minio** — stateful слой (реплики БД/S3 — отдельная инфраструктура).
+- API: http://localhost:8000/health  
+- Каталог: http://localhost:3000  
+- MinIO console: http://localhost:9001  
 
-## Быстрый старт
+## Поведение
 
-1. Скопируйте переменные окружения:
+- Бот: `/start` → «У меня есть товары» и кнопка Mini App «Открыть каталог».
+- Админ: одно сообщение **фото + подпись (название)** → API кладёт файл в bucket и строку в Postgres.
+- API: `GET /health`, `GET /api/products`, `POST /api/products` (multipart: `name`, `image`).
+- Web: страница «Каталог», подключён `telegram-web-app.js`.
 
-   ```bash
-   cp .env.example .env
-   ```
+Данные каталога только в Postgres и object storage; `api`, `bot`, `web` не пишут их на локальный диск.
 
-2. Укажите в `.env`:
-   - `BOT_TOKEN` — токен от [@BotFather](https://t.me/BotFather)
-   - `ADMIN_TELEGRAM_IDS` — числовые Telegram ID админов через запятую
-   - `WEBAPP_URL` — публичный HTTPS URL страницы каталога (для Mini App в проде; локально можно `http://localhost:3000` для браузера)
-   - `MINIO_PUBLIC_URL` — URL, по которому браузер открывает картинки (локально `http://localhost:9000`)
-
-3. Запуск:
-
-   ```bash
-   docker compose up --build
-   ```
-
-4. Проверка:
-   - API: [http://localhost:8000/health](http://localhost:8000/health)
-   - Каталог: [http://localhost:3000](http://localhost:3000) — заголовок **«Каталог»**
-   - MinIO Console: [http://localhost:9001](http://localhost:9001)
-
-## Функции
-
-| Компонент | Поведение |
-|-----------|-----------|
-| **Бот** | `/start` или текст → «У меня есть товары» + кнопка WebApp «Открыть каталог» |
-| **Админ** | Одно сообщение: **фото + подпись (название)** → загрузка в MinIO, запись в Postgres через API |
-| **API** | `GET /health`, `GET /api/products`, `POST /api/products` (multipart: `name`, `image`) |
-| **Web** | Страница «Каталог»: список названий и изображений; подключён `telegram-web-app.js` для TMA |
-
-## Структура репозитория
+## Структура
 
 ```
 api/          FastAPI
-bot/          aiogram 3.x
-web/          Next.js (App Router)
+bot/          aiogram 3
+web/          Next.js
 docker/       init-db.sql, minio-init.sh
 docker-compose.yml
+render.yaml
 .env.example
 ```
 
-## Локальная разработка без Docker
+## Переменные окружения
 
-**API**
+Список и комментарии — [.env.example](.env.example).
 
-```bash
-cd api && python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-export DATABASE_URL=postgresql://catalog:catalog_secret@localhost:5432/catalog
-uvicorn app.main:app --reload --port 8000
-```
+## Render
 
-**Bot**
+[`render.yaml`](render.yaml) — Blueprint: Postgres, сервисы `api`, `web`, `bot` (webhook). MinIO из compose на Render не поднимается, нужны внешние `MINIO_*`.
 
-```bash
-cd bot && pip install -r requirements.txt
-export BOT_TOKEN=... ADMIN_TELEGRAM_IDS=... API_URL=http://localhost:8000 WEBAPP_URL=http://localhost:3000
-python -m bot.main
-```
+1. [Подключить репозиторий](https://dashboard.render.com/blueprint/new?repo=https://github.com/ayoleynikov/InvixSolutions-Oleynikov).
+2. В Dashboard задать секреты с `sync: false`: `BOT_TOKEN`, `ADMIN_TELEGRAM_IDS`, `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_PUBLIC_URL`, `CORS_ORIGINS` (HTTPS URL web), `WEBAPP_URL`, при необходимости `NEXT_PUBLIC_API_URL` (публичный api). Bucket по умолчанию `products`.
+3. R2: endpoint вида `<account_id>.r2.cloudflarestorage.com`, `MINIO_SECURE=true`. Публичный `*.r2.dev` уже привязан к bucket — в URL нет сегмента bucket (логика в `api/app/storage.py`, опция `MINIO_PUBLIC_URL_OMIT_BUCKET`).
+4. Проверка: `https://<api>/health`, `https://<web>/`, webhook `https://<bot>/webhook` (если `WEBHOOK_URL` не задан — из `RENDER_EXTERNAL_HOSTNAME`).
 
-**Web**
+SSR web ходит в api по внутренней сети (`API_INTERNAL_HOST` / `API_INTERNAL_PORT` из Blueprint).
 
-```bash
-cd web && npm install && npm run dev
-```
+## Масштабирование (2+ реплики)
 
-## Webhook для нескольких реплик бота
+- **api** — stateless, общая БД и bucket, без sticky sessions.
+- **web** — сколько угодно реплик Next standalone; SSR на внутренний api.
+- **bot** — несколько инстансов только с `BOT_MODE=webhook` и одним `WEBHOOK_URL` за прокси. `polling` — один процесс.
+- **postgres / minio** — stateful; реплики — отдельная история.
+
+Webhook:
 
 ```env
 BOT_MODE=webhook
@@ -100,30 +70,20 @@ WEBHOOK_PATH=/webhook
 WEBHOOK_PORT=8080
 ```
 
-Пробросьте HTTPS на сервис `bot:8080`. Все реплики получают один и тот же `WEBHOOK_URL`; Telegram шлёт updates на балансировщик.
+HTTPS на `bot:8080`.
 
-## Переменные окружения
+## Без Docker (для отладки)
 
-См. [.env.example](.env.example).
+**API:** `cd api`, venv, `pip install -r requirements.txt`,  
+`DATABASE_URL=postgresql://catalog:catalog_secret@localhost:5432/catalog`,  
+`uvicorn app.main:app --reload --port 8000`.
 
-## Деплой на Render
+**Bot:** `cd bot`, `pip install -r requirements.txt`,  
+`BOT_TOKEN=... ADMIN_TELEGRAM_IDS=... API_URL=http://localhost:8000 WEBAPP_URL=http://localhost:3000`,  
+`python -m bot.main`.
 
-В корне репозитория лежит [`render.yaml`](render.yaml) — Blueprint для PostgreSQL, API, Next.js и Telegram-бота (webhook).
-
-1. Откройте [создание Blueprint](https://dashboard.render.com/blueprint/new?repo=https://github.com/ayoleynikov/InvixSolutions-Oleynikov) и подключите репозitory.
-2. При первом применении Blueprint укажите в Dashboard значения с **`sync: false`**:
-   - **`BOT_TOKEN`**, **`ADMIN_TELEGRAM_IDS`** — Telegram.
-   - **`MINIO_ENDPOINT`**, **`MINIO_ACCESS_KEY`**, **`MINIO_SECRET_KEY`**, **`MINIO_PUBLIC_URL`** — внешнее S3-хранилище (рекомендуется [Cloudflare R2](https://developers.cloudflare.com/r2/) или AWS S3). API использует те же переменные, что и локальный MinIO (`api/app/storage.py`). Создайте bucket `products` (или задайте другое имя в `MINIO_BUCKET` в Blueprint). Для R2: endpoint вида `<account_id>.r2.cloudflarestorage.com`, `MINIO_SECURE=true`, `MINIO_PUBLIC_URL` — публичный URL bucket/CDN для картинок в браузере. Локальный MinIO отдаёт картинки как `{MINIO_PUBLIC_URL}/{MINIO_BUCKET}/{key}`; публичный поддомен R2 `*.r2.dev` уже привязан к bucket, поэтому URL без сегмента bucket: `{MINIO_PUBLIC_URL}/{key}` (определяется автоматически; при необходимости — `MINIO_PUBLIC_URL_OMIT_BUCKET`).
-   - **`CORS_ORIGINS`** — HTTPS URL сервиса **web** (например `https://web-xxxx.onrender.com`).
-   - **`WEBAPP_URL`** — тот же публичный URL каталога (кнопка Mini App в боте).
-   - **`NEXT_PUBLIC_API_URL`** (web) — публичный URL сервиса **api** (например `https://api-xxxx.onrender.com`), если нужен клиентский доступ к API; SSR ходит во внутреннюю сеть через `API_INTERNAL_HOST` / `API_INTERNAL_PORT`.
-3. После деплоя проверьте:
-   - `https://<api>/health`
-   - `https://<web>/`
-   - Webhook бота: `https://<bot>/webhook` (задаётся автоматически из `RENDER_EXTERNAL_HOSTNAME`, если `WEBHOOK_URL` не задан).
-
-Сервисы **api**, **web** и **bot** stateless; данные только в Postgres и object storage. Локальный MinIO в Compose на Render не поднимается — только внешний S3-compatible backend.
+**Web:** `cd web && npm install && npm run dev`.
 
 ## Лицензия
 
-Учебный проект для технического задания Invix Solutions.
+Учебный проект по ТЗ Invix Solutions.
