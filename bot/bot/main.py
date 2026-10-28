@@ -47,6 +47,11 @@ async def run_webhook():
     await bot.set_webhook(WEBHOOK_URL)
 
     app = web.Application()
+
+    async def health(_request: web.Request) -> web.Response:
+        return web.json_response({"status": "ok"})
+
+    app.router.add_get("/health", health)
     webhook_handler = SimpleRequestHandler(dispatcher=dp, bot=bot)
     webhook_handler.register(app, path=WEBHOOK_PATH)
     setup_application(app, dp, bot=bot)

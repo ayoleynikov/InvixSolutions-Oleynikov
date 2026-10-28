@@ -9,11 +9,20 @@ type Product = {
   created_at: string;
 };
 
+function resolveApiBase(): string {
+  if (process.env.INTERNAL_API_URL) {
+    return process.env.INTERNAL_API_URL;
+  }
+  const host = process.env.API_INTERNAL_HOST;
+  const port = process.env.API_INTERNAL_PORT;
+  if (host && port) {
+    return `http://${host}:${port}`;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+}
+
 async function fetchProducts(): Promise<Product[]> {
-  const base =
-    process.env.INTERNAL_API_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    "http://localhost:8000";
+  const base = resolveApiBase();
   const res = await fetch(`${base}/api/products`, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`API responded with ${res.status}`);

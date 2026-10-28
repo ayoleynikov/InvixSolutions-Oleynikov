@@ -106,6 +106,24 @@ WEBHOOK_PORT=8080
 
 См. [.env.example](.env.example).
 
+## Деплой на Render
+
+В корне репозитория лежит [`render.yaml`](render.yaml) — Blueprint для PostgreSQL, API, Next.js и Telegram-бота (webhook).
+
+1. Откройте [создание Blueprint](https://dashboard.render.com/blueprint/new?repo=https://github.com/ayoleynikov/InvixSolutions-Oleynikov) и подключите репозitory.
+2. При первом применении Blueprint укажите в Dashboard значения с **`sync: false`**:
+   - **`BOT_TOKEN`**, **`ADMIN_TELEGRAM_IDS`** — Telegram.
+   - **`MINIO_ENDPOINT`**, **`MINIO_ACCESS_KEY`**, **`MINIO_SECRET_KEY`**, **`MINIO_PUBLIC_URL`** — внешнее S3-хранилище (рекомендуется [Cloudflare R2](https://developers.cloudflare.com/r2/) или AWS S3). API использует те же переменные, что и локальный MinIO (`api/app/storage.py`). Создайте bucket `products` (или задайте другое имя в `MINIO_BUCKET` в Blueprint). Для R2: endpoint вида `<account_id>.r2.cloudflarestorage.com`, `MINIO_SECURE=true`, `MINIO_PUBLIC_URL` — публичный URL bucket/CDN для картинок в браузере.
+   - **`CORS_ORIGINS`** — HTTPS URL сервиса **web** (например `https://web-xxxx.onrender.com`).
+   - **`WEBAPP_URL`** — тот же публичный URL каталога (кнопка Mini App в боте).
+   - **`NEXT_PUBLIC_API_URL`** (web) — публичный URL сервиса **api** (например `https://api-xxxx.onrender.com`), если нужен клиентский доступ к API; SSR ходит во внутреннюю сеть через `API_INTERNAL_HOST` / `API_INTERNAL_PORT`.
+3. После деплоя проверьте:
+   - `https://<api>/health`
+   - `https://<web>/`
+   - Webhook бота: `https://<bot>/webhook` (задаётся автоматически из `RENDER_EXTERNAL_HOSTNAME`, если `WEBHOOK_URL` не задан).
+
+Сервисы **api**, **web** и **bot** stateless; данные только в Postgres и object storage. Локальный MinIO в Compose на Render не поднимается — только внешний S3-compatible backend.
+
 ## Лицензия
 
 Учебный проект для технического задания Invix Solutions.

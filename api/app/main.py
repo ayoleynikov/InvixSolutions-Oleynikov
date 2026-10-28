@@ -4,7 +4,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.db import close_pool, get_pool
+from app.db import close_pool, get_pool, init_schema
 from app.schemas import ProductOut
 from app.storage import check_minio, upload_image
 
@@ -18,7 +18,8 @@ ALLOWED_CONTENT_TYPES = {
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await get_pool()
+    pool = await get_pool()
+    await init_schema(pool)
     yield
     await close_pool()
 
