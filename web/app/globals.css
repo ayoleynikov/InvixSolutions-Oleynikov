@@ -1,0 +1,38 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 0;
+  padding: 1rem;
+  line-height: 1.4;
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin: 0 0 1rem;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+li {
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 0.75rem;
+}
+
+li img {
+  max-width: 240px;
+  height: auto;
+  display: block;
+  margin-top: 0.25rem;
+}
+
+.error {
+  color: #a00;
+}
+
+.empty {
+  color: #666;
+}

@@ -1,0 +1,104 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-catalog}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-catalog_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-catalog}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-catalog} -d ${POSTGRES_DB:-catalog}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_started
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_BUCKET: ${MINIO_BUCKET:-products}
+    volumes:
+      - ./docker/minio-init.sh:/minio-init.sh:ro
+    entrypoint: ["/bin/sh", "/minio-init.sh"]
+    restart: "no"
+
+  api:
+    build: ./api
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://catalog:catalog_secret@postgres:5432/catalog}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_BUCKET: ${MINIO_BUCKET:-products}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}
+      MINIO_SECURE: "false"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  bot:
+    build: ./bot
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN}
+      ADMIN_TELEGRAM_IDS: ${ADMIN_TELEGRAM_IDS:-}
+      WEBAPP_URL: ${WEBAPP_URL:-http://localhost:3000}
+      API_URL: ${API_URL:-http://api:8000}
+      BOT_MODE: ${BOT_MODE:-polling}
+      WEBHOOK_HOST: ${WEBHOOK_HOST:-0.0.0.0}
+      WEBHOOK_PORT: ${WEBHOOK_PORT:-8080}
+      WEBHOOK_PATH: ${WEBHOOK_PATH:-/webhook}
+      WEBHOOK_URL: ${WEBHOOK_URL:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+  web:
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      INTERNAL_API_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  minio_data:
