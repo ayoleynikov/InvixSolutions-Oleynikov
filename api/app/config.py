@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     minio_secret_key: str = "minioadmin"
     minio_bucket: str = "products"
     minio_public_url: str = "http://localhost:9000"
+    # When unset, public_url omits the bucket segment only for *.r2.dev bases.
+    minio_public_url_omit_bucket: bool | None = None
     minio_secure: bool = False
     cors_origins: str = "http://localhost:3000"
 

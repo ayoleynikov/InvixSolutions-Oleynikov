@@ -17,10 +17,21 @@ def _client() -> Minio:
     )
 
 
+def _omit_bucket_in_public_url(base: str) -> bool:
+    """R2 r2.dev public URLs are already bucket-scoped; MinIO path-style needs /bucket/key."""
+    explicit = settings.minio_public_url_omit_bucket
+    if explicit is not None:
+        return explicit
+    normalized = base if "://" in base else f"http://{base}"
+    host = (urlparse(normalized).hostname or "").lower()
+    return host == "r2.dev" or host.endswith(".r2.dev")
+
+
 def public_url(object_key: str) -> str:
     base = settings.minio_public_url.rstrip("/")
-    bucket = settings.minio_bucket
-    return f"{base}/{bucket}/{object_key}"
+    if _omit_bucket_in_public_url(base):
+        return f"{base}/{object_key}"
+    return f"{base}/{settings.minio_bucket}/{object_key}"
 
 
 def upload_image(data: bytes, content_type: str, extension: str) -> tuple[str, str]:
