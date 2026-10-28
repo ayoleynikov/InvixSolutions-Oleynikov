@@ -21,9 +21,14 @@ function resolveApiBase(): string {
   return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 }
 
+const API_FETCH_TIMEOUT_MS = 5_000;
+
 async function fetchProducts(): Promise<Product[]> {
   const base = resolveApiBase();
-  const res = await fetch(`${base}/api/products`, { cache: "no-store" });
+  const res = await fetch(`${base}/api/products`, {
+    cache: "no-store",
+    signal: AbortSignal.timeout(API_FETCH_TIMEOUT_MS),
+  });
   if (!res.ok) {
     throw new Error(`API responded with ${res.status}`);
   }
